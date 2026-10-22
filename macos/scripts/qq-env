@@ -1,0 +1,10 @@
+#!/bin/bash
+set -euo pipefail
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+if [ ! -x "$PROJECT_DIR/.venv/bin/python" ]; then
+  printf '请先双击「启动管理界面.command」准备本项目环境。\n' >&2
+  exit 1
+fi
+export PYTHONPYCACHEPREFIX="$PROJECT_DIR/runtime/cache/pycache"
+if [ "$#" -eq 0 ]; then set -- status; fi
+exec "$PROJECT_DIR/.venv/bin/python" "$PROJECT_DIR/scripts/runtime.py" "$@"

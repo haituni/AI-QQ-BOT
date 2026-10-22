@@ -1,0 +1,8 @@
+# Native entry points keep usable line endings after checkout on either platform.
+Windows/*.cmd text eol=crlf
+macos/*.command text eol=lf
+macos/scripts/*.sh text eol=lf
+macos/scripts/qq-env text eol=lf
+*.py text eol=lf
+Windows/scripts/windows/*.ps1 text eol=crlf
+Windows/scripts/windows/*.cs text eol=lf

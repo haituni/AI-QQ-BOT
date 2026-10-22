@@ -1,0 +1,1 @@
+"""Directory-contained QQ companion."""

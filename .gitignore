@@ -1,0 +1,50 @@
+runtime/
+.venv/
+config/*.json
+config/*token*
+data/
+logs/
+__pycache__/
+*.pyc
+.DS_Store
+.lima-release.json
+# Private/local artifacts must never enter source history.
+backups/
+characters/
+config/
+*.sqlite3*
+*.app/
+.env
+.env.*
+.agents/
+.codex/
+.aws/
+docs/research/
+docs/development/
+# Local working notes, not release content.
+/task_plan.md
+/notes.md
+
+# Clean platform source releases; only initial role seeds are versioned.
+!macos/initial/
+!Windows/initial/
+
+# Desktop release binaries are built locally or in CI, never mixed with source.
+Windows/栖.exe
+Windows/build/
+Windows/scripts/windows/obj/
+macos/build/
+
+# Disposable files from desktop builds and first-run installers, at any nesting level.
+**/bin/
+**/obj/
+**/build/
+**/dist/
+*.pdb
+*.py[co]
+*.part
+*.tmp
+Thumbs.db
+Windows/*.exe
+Windows/*.zip
+macos/*.zip
