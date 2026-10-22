@@ -77,3 +77,42 @@ class InstallationState(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     with install_state.installation(root): pass
             with install_state.installation(root): pass
+
+
+class RuntimeDownload(unittest.TestCase):
+    def test_proxy_failure_retries_direct_with_resume_and_stall_limit(self):
+        import hashlib
+        from types import SimpleNamespace
+        payload = b'verified-runtime'
+        env = {'https_proxy': 'http://localhost:7897'}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'runtime.tar.gz'
+            def fetch(command, **kwargs):
+                if '--noproxy' not in command:
+                    path.write_bytes(b'partial')
+                    return SimpleNamespace(returncode=28)
+                path.write_bytes(payload)
+                return SimpleNamespace(returncode=0)
+            with patch.object(bootstrap, 'environment', return_value=env), \
+                 patch.object(bootstrap.subprocess, 'run', side_effect=fetch) as run:
+                bootstrap.download('https://example.invalid/runtime.tar.gz', path,
+                                   hashlib.sha256(payload).hexdigest())
+            self.assertEqual(run.call_count, 2)
+            command = run.call_args.args[0]
+            self.assertIn('--noproxy', command)
+            self.assertIn('-C', command)
+            self.assertIn('--speed-time', command)
+            self.assertNotIn('--insecure', command)
+            self.assertEqual(env, {'https_proxy': 'http://localhost:7897'})
+
+    def test_bad_runtime_checksum_is_rejected(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'runtime.tar.gz'
+            def fetch(*args, **kwargs):
+                path.write_bytes(b'corrupt')
+                return SimpleNamespace(returncode=0)
+            with patch.object(bootstrap, 'environment', return_value={}), \
+                 patch.object(bootstrap.subprocess, 'run', side_effect=fetch):
+                with self.assertRaisesRegex(RuntimeError, '下载校验失败'):
+                    bootstrap.download('https://example.invalid/runtime.tar.gz', path, '0'*64)

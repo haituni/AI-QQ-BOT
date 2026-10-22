@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
+import codecs
 import copy
 import hashlib
 import json
@@ -16,6 +18,26 @@ from pathlib import Path
 
 from .config import ROOT, Config, atomic_json, validate, migrate
 from .store import Store
+
+
+async def runtime_lines(stream: asyncio.StreamReader) -> AsyncIterator[str]:
+    """Publish curl/Docker carriage-return progress without waiting for EOF."""
+    decoder = codecs.getincrementaldecoder('utf-8')(errors='replace')
+    pending = ''
+    while True:
+        chunk = await stream.read(4096)
+        pending += decoder.decode(chunk, final=not chunk)
+        parts = re.split(r'[\r\n]', pending)
+        pending = parts.pop()
+        for line in parts:
+            if line:
+                yield line
+        if len(pending) > 2**20:
+            raise ValueError('环境日志单行过长')
+        if not chunk:
+            if pending:
+                yield pending
+            return
 
 
 class Operations:
@@ -321,6 +343,7 @@ class Operations:
             if value:
                 line = line.replace(value, '[密钥已隐藏]')
         line = re.sub(r'(?i)(bearer\s+|token[=: ]+)[^\s,;]+', r'\1[已隐藏]', line)
+        line = re.sub(r'(?i)(https?://)[^/\s@]+@', r'\1[代理凭据已隐藏]@', line)
         return line[:1000]
 
     async def run(self, command: str) -> None:
@@ -331,8 +354,8 @@ class Operations:
                 cwd=ROOT, env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, start_new_session=os.name != 'nt', limit=2**20,
                 **({'creationflags': __import__('subprocess').CREATE_NO_WINDOW} if os.name == 'nt' else {}))
             async with asyncio.timeout(1800):
-                async for raw in process.stdout:
-                    self.job['lines'] = (self.job['lines'] + [self.redact(raw.decode('utf-8', errors='replace').rstrip())])[-80:]
+                async for line in runtime_lines(process.stdout):
+                    self.job['lines'] = (self.job['lines'] + [self.redact(line.rstrip())])[-80:]
                     atomic_json(self.job_path, self.job)
                 code = await process.wait()
             self.job.update(status='succeeded' if code == 0 else 'failed', exit_code=code)

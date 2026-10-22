@@ -30,7 +30,7 @@ GUEST_IMAGES = {
 
 def lima(*args: str, input: str | None = None, check: bool = True, capture: bool = False):
     return subprocess.run([str(RUNTIME / "lima-bin/bin/limactl"), *args], input=input,
-                          text=True, cwd=ROOT, env=environment(), check=check,
+                          text=True, cwd=ROOT, env=environment(), check=check, timeout=1200,
                           stdout=subprocess.PIPE if capture else None)
 
 
@@ -42,7 +42,57 @@ def ensure_image() -> None:
         print("已找到对应版本的本地组件，无需重新下载。", flush=True)
         return
     print("阶段：下载 QQ 接入组件（首次可能需要数分钟）", flush=True)
-    lima("shell", INSTANCE, "sudo", "docker", "pull", IMAGE)
+    for attempt in range(3):
+        if attempt:
+            print("阶段：重试下载 QQ 接入组件（复用已完成分层）", flush=True)
+        result = lima("shell", INSTANCE, "sudo", "docker", "pull", IMAGE, check=False)
+        if result.returncode == 0:
+            return
+    raise RuntimeError("QQ 镜像下载失败；请检查代理及镜像仓库连接，然后重试安装。")
+
+
+DOCKER_SETUP = r'''#!/bin/sh
+set -eu
+apt_direct() {
+  env -u http_proxy -u https_proxy -u all_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
+    apt-get -o Acquire::http::Proxy=DIRECT -o Acquire::https::Proxy=DIRECT \
+    -o Acquire::Retries=1 -o Acquire::http::Timeout=25 -o Acquire::https::Timeout=25 "$@"
+}
+if ! command -v docker >/dev/null 2>&1; then
+  export DEBIAN_FRONTEND=noninteractive
+  echo '阶段：更新 Docker 软件源（直连）'
+  if ! apt_direct -o APT::Update::Error-Mode=any update; then
+    echo '阶段：直连软件源失败，使用当前代理重试'
+    apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=1 \
+      -o Acquire::http::Timeout=25 -o Acquire::https::Timeout=25 update
+  fi
+  echo '阶段：安装 Docker'
+  if ! apt_direct install -y docker.io; then
+    echo '阶段：直连安装失败，使用当前代理重试'
+    apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=25 \
+      -o Acquire::https::Timeout=25 install -y docker.io
+  fi
+fi
+mkdir -p /etc/systemd/system/docker.service.d
+dropin=/etc/systemd/system/docker.service.d/qq-companion-env.conf
+changed=0
+if ! printf '[Service]\nEnvironmentFile=-/etc/environment\n' | cmp -s - "$dropin"; then
+  printf '[Service]\nEnvironmentFile=-/etc/environment\n' > "$dropin"
+  systemctl daemon-reload
+  changed=1
+fi
+systemctl enable --now docker
+if [ "$changed" = 1 ]; then systemctl restart docker; fi
+docker info >/dev/null
+'''
+
+
+def ensure_docker() -> None:
+    print("阶段：检查并准备 Docker（安装失败会立即报告，可重试）", flush=True)
+    try:
+        lima("shell", INSTANCE, "sudo", "sh", "-s", input=DOCKER_SETUP)
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError("Docker 安装或启动失败；请检查上方软件源和代理日志后重试安装。") from error
 
 
 def install() -> None:
@@ -87,34 +137,16 @@ portForwards:
     guestIP: 0.0.0.0
     proto: any
     ignore: true
-provision:
-  - mode: system
-    script: |
-      #!/bin/sh
-      set -eu
-      if ! command -v docker >/dev/null 2>&1; then
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update
-        apt-get install -y docker.io
-      fi
-      mkdir -p /etc/systemd/system/docker.service.d
-      printf '[Service]\\nEnvironmentFile=-/etc/environment\\n' > /etc/systemd/system/docker.service.d/qq-companion-env.conf
-      systemctl daemon-reload
-      systemctl enable --now docker
-      systemctl restart docker
-probes:
-  - script: |
-      #!/bin/sh
-      sudo docker info >/dev/null
-    hint: Docker is still installing inside the VM; rerun installation to retry.
 """)
     lima("validate", str(yaml))
     instance = RUNTIME / "lima" / INSTANCE
-    if instance.exists() and not any((instance / name).exists() for name in ("basedisk", "diffdisk", "disk")):
-        # A previous interrupted initial image download may have saved a stale config.
+    if instance.exists():
+        # Replace generated config, including obsolete blocking provision/probes.
+        # Existing disks and QQ login data remain in place.
         (instance / "lima.yaml").write_text(yaml.read_text())
     print("阶段：启动独立环境，请稍候", flush=True)
     lima("start", "--tty=false", INSTANCE if instance.exists() else str(yaml), *([] if instance.exists() else ["--name", INSTANCE]))
+    ensure_docker()
     ensure_image()
     if Config(ROOT).value["bot_qq"]:
         deploy()
@@ -192,14 +224,8 @@ def main() -> None:
     except BlockingIOError:
         raise RuntimeError('另一个 QQ 环境操作正在执行，请稍后再试')
     command = sys.argv[1] if len(sys.argv) > 1 else "status"
-    if command == "install":
+    if command in ("install", "start"):
         install()
-    elif command == "start":
-        if not (RUNTIME / "lima" / INSTANCE).exists():
-            install()
-        else:
-            lima("start", "--tty=false", INSTANCE)
-            deploy()
     elif command == "stop":
         if (RUNTIME / "lima" / INSTANCE).exists():
             lima("stop", INSTANCE)
@@ -215,6 +241,9 @@ def main() -> None:
 if __name__ == "__main__":
     try:
         main()
+    except subprocess.TimeoutExpired:
+        print("未完成：QQ 环境操作超时，请检查网络或代理后重试安装。", file=sys.stderr)
+        raise SystemExit(1)
     except (RuntimeError, subprocess.CalledProcessError) as error:
         print("未完成：" + str(error), file=sys.stderr)
         raise SystemExit(1)

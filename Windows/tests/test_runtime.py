@@ -59,3 +59,38 @@ class DockerRuntime(unittest.TestCase):
             inspect.return_value = {'Config': {'Image': runtime.IMAGE, 'Env': ['ACCOUNT=123456789']}, 'State': {'Running': True}}
             runtime.deploy()
             docker.assert_not_called()
+
+    def test_pull_output_is_streamed_and_timeout_is_bounded(self):
+        with patch.object(runtime.shutil, 'which', return_value='docker.exe'), \
+             patch.object(runtime.subprocess, 'run') as run:
+            runtime.docker('pull', runtime.IMAGE, check=False, stream=True)
+        self.assertFalse(run.call_args.kwargs['capture_output'])
+        self.assertEqual(run.call_args.kwargs['timeout'], 1200)
+
+    def test_failed_pull_retries_and_preserves_install_completion_rule(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(runtime, 'RUNTIME', Path(tmp)), patch.object(runtime, 'BASE', Path(tmp)/'napcat'), \
+             patch.object(runtime, 'environment'), patch.object(runtime, 'Config') as cfg, \
+             patch.object(runtime, 'docker', side_effect=[SimpleNamespace(stdout='linux\n', returncode=0),
+                 SimpleNamespace(returncode=1), *[SimpleNamespace(returncode=1)]*3]) as docker, \
+             patch.object(sys, 'argv', ['runtime.py', 'install']):
+            cfg.return_value.value = {'bot_qq': ''}
+            with self.assertRaisesRegex(RuntimeError, 'Docker Desktop 的代理'):
+                runtime.main()
+            pulls = [c for c in docker.call_args_list if c.args[0] == 'pull']
+            self.assertEqual(len(pulls), 3)
+            self.assertTrue(all(c.kwargs.get('stream') for c in pulls))
+            self.assertFalse((Path(tmp)/'napcat/installed').exists())
+
+    def test_transient_pull_failure_can_complete_installation(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(runtime, 'RUNTIME', Path(tmp)), patch.object(runtime, 'BASE', Path(tmp)/'napcat'), \
+             patch.object(runtime, 'environment'), patch.object(runtime, 'Config') as cfg, \
+             patch.object(runtime, 'docker', side_effect=[SimpleNamespace(stdout='linux\n', returncode=0),
+                 SimpleNamespace(returncode=1), SimpleNamespace(returncode=1),
+                 SimpleNamespace(returncode=0)]) as docker, \
+             patch.object(sys, 'argv', ['runtime.py', 'install']):
+            cfg.return_value.value = {'bot_qq': ''}
+            runtime.main()
+            self.assertEqual(len([c for c in docker.call_args_list if c.args[0] == 'pull']), 2)
+            self.assertTrue((Path(tmp)/'napcat/installed').is_dir())

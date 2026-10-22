@@ -52,9 +52,17 @@ def download(url: str, path: Path, digest: str | None = None) -> None:
         return
     print("下载：" + path.name, flush=True)
     # Use curl's platform certificate store; never turn off certificate verification.
+    env = environment()
+    has_proxy = any(value for key, value in env.items()
+                    if key.lower() in ('http_proxy', 'https_proxy', 'all_proxy'))
     for attempt in range(3):
+        direct = has_proxy and attempt == 1
+        if attempt:
+            print("阶段：下载重试（" + ("直连" if direct else "当前网络配置") + "）：" + path.name, flush=True)
         result = subprocess.run(["curl.exe", "-fL", "--connect-timeout", "25", "--max-time", "900",
-                                 *(["-C", "-"] if digest else []), "-o", str(path), url], env=environment(), **hidden())
+                                 "--speed-limit", "1024", "--speed-time", "60",
+                                 *(["--noproxy", "*"] if direct else []),
+                                 *(["-C", "-"] if digest else []), "-o", str(path), url], env=env, **hidden())
         if result.returncode == 0:
             break
         if attempt == 2:

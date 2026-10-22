@@ -20,12 +20,13 @@ CONTAINER = 'qq-companion-' + OWNER
 BASE = RUNTIME / 'napcat'
 
 
-def docker(*args: str, check: bool = True) -> subprocess.CompletedProcess:
+def docker(*args: str, check: bool = True, stream: bool = False) -> subprocess.CompletedProcess:
     binary = shutil.which('docker')
     if not binary:
         raise RuntimeError('请先安装并启动 Docker Desktop，启用 WSL 2 与 Linux 容器模式。')
     return subprocess.run([binary, *args], check=check, text=True, encoding='utf-8',
-                          errors='replace', capture_output=True, cwd=ROOT, **hidden())
+                          errors='replace', capture_output=not stream, timeout=1200 if stream else 60,
+                          cwd=ROOT, **hidden())
 
 
 def inspect() -> dict | None:
@@ -92,7 +93,14 @@ def main() -> None:
                 raise RuntimeError('请将 Docker Desktop 切换为 Linux 容器模式。')
             if docker('image', 'inspect', IMAGE, check=False).returncode:
                 print('阶段：下载 QQ 接入镜像，首次可能需要数分钟。', flush=True)
-                docker('pull', IMAGE)
+                for attempt in range(3):
+                    if attempt:
+                        print('阶段：重试下载 QQ 接入镜像（复用已完成分层）', flush=True)
+                    result = docker('pull', IMAGE, check=False, stream=True)
+                    if result.returncode == 0:
+                        break
+                else:
+                    raise RuntimeError('QQ 镜像下载失败；请检查 Docker Desktop 的代理设置和镜像仓库连接，然后重试安装。')
             (BASE / 'installed').mkdir(exist_ok=True)
             if Config(ROOT).value['bot_qq']:
                 deploy()
@@ -112,6 +120,9 @@ def main() -> None:
 if __name__ == '__main__':
     try:
         main()
+    except subprocess.TimeoutExpired:
+        print('Docker 操作超时，请检查 Docker Desktop 和代理连接后重试安装。', file=sys.stderr)
+        raise SystemExit(1)
     except subprocess.CalledProcessError as error:
         # Docker errors may contain environment values. Do not echo raw output.
         print('Docker 操作失败，请检查 Docker Desktop、网络和本机 3001/6099 端口。', file=sys.stderr)

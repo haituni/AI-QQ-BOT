@@ -270,18 +270,32 @@ class RecoveryBoundaries(unittest.IsolatedAsyncioTestCase):
 
 
 class RuntimeJobSafety(unittest.IsolatedAsyncioTestCase):
+    async def test_carriage_return_progress_is_available_before_process_exits(self):
+        from bot.operations import runtime_lines
+        stream = asyncio.StreamReader()
+        stream.feed_data(b'10%\r20%\r')
+        lines = runtime_lines(stream)
+        self.assertEqual(await asyncio.wait_for(anext(lines), 1), '10%')
+        self.assertEqual(await asyncio.wait_for(anext(lines), 1), '20%')
+        stream.feed_data('完成'.encode('utf-8')[:2])
+        stream.feed_data('完成'.encode('utf-8')[2:])
+        stream.feed_eof()
+        self.assertEqual(await anext(lines), '完成')
+        with self.assertRaises(StopAsyncIteration):
+            await anext(lines)
+
     async def test_runtime_output_is_redacted_and_result_is_durable(self):
         from unittest.mock import patch
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);config=Config(root);config.update({'api_key':'TEST-SECRET-KEY'})
             store=Store(root);ops=Operations(config,store,offline=True)
             ops.job={'command':'install','status':'running','lines':[],'started':time.time()}
-            stream=asyncio.StreamReader();stream.feed_data(b'progress TEST-SECRET-KEY bearer PRIVATE-TOKEN\n');stream.feed_eof()
+            stream=asyncio.StreamReader();stream.feed_data(b'progress TEST-SECRET-KEY bearer PRIVATE-TOKEN\rproxy http://user:password@localhost:7897\r');stream.feed_eof()
             process=type('Process',(),{'stdout':stream,'returncode':0})()
             process.wait=AsyncMock(return_value=0)
             with patch('bot.operations.asyncio.create_subprocess_exec',new=AsyncMock(return_value=process)):
                 await ops.run('install')
             self.assertEqual(ops.job['status'],'succeeded')
             saved=(root/'runtime/operation.json').read_text()
-            self.assertNotIn('TEST-SECRET-KEY',saved);self.assertNotIn('PRIVATE-TOKEN',saved)
+            self.assertNotIn('TEST-SECRET-KEY',saved);self.assertNotIn('PRIVATE-TOKEN',saved);self.assertNotIn('user:password',saved)
             self.assertIn('progress',saved);store.db.close()
