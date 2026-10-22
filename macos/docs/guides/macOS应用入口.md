@@ -10,4 +10,4 @@
 
 开发者构建：双击 `构建桌面应用.command`，或运行 `python3 scripts/build_macos_app.py`。源码位于 `scripts/macos/Launcher.swift`，控制助手是 `scripts/desktop.py`。`--preview` 参数可预览安装窗口而不启动服务或下载；该模式不用于日常运行。
 
-打包：`python3 scripts/package_desktop.py`，生成的 ZIP 不含个人配置或运行数据。源码仓库忽略构建应用及 ZIP，保留构建脚本。备用 `.command` 入口用于排错。
+GitHub 仓库已附带 Apple Silicon（arm64）版 `栖.app`；Intel Mac 用户需在 Intel Mac 上构建对应版本。运行 `python3 scripts/package_desktop.py` 可生成不含个人配置或运行数据的发行 ZIP。Git 跟踪原生应用和构建脚本，忽略发行 ZIP。备用 `.command` 入口用于排错。

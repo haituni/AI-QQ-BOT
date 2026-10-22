@@ -13,7 +13,6 @@ backups/
 characters/
 config/
 *.sqlite3*
-*.app/
 .env
 .env.*
 .agents/
@@ -21,6 +20,9 @@ config/
 .aws/
 docs/research/
 docs/development/
+# Keep the preserved root project out of the cross-platform upload.
+/栖.app/
+/栖.exe
 # Local working notes, not release content.
 /task_plan.md
 /notes.md
@@ -30,7 +32,6 @@ docs/development/
 !Windows/initial/
 
 # Desktop release binaries are built locally or in CI, never mixed with source.
-Windows/栖.exe
 Windows/build/
 Windows/scripts/windows/obj/
 macos/build/
@@ -45,6 +46,5 @@ macos/build/
 *.part
 *.tmp
 Thumbs.db
-Windows/*.exe
 Windows/*.zip
 macos/*.zip

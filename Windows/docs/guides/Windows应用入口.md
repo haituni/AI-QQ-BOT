@@ -12,4 +12,4 @@
 
 开发者在 Windows 上执行 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/build.ps1`，使用系统编译器生成应用；或使用 .NET SDK 执行 `dotnet build scripts/windows/Launcher.csproj -c Release`。`--preview` 参数可预览窗口而不下载或启动服务。
 
-构建完成后，可用 Python 3 执行 `scripts/package_desktop.py` 生成不含配置和运行数据的 ZIP。构建成品不纳入 Git。源码目录不附带可执行文件；构建后仍需在 Windows 上验收原生托盘、下载流程和 QQ 登录。
+GitHub 仓库已附带 Windows x64 的 `栖.exe`。开发者重建后，可用 Python 3 执行 `scripts/package_desktop.py` 生成不含配置和运行数据的 ZIP。跨平台构建后仍需在 Windows 上验收原生托盘、下载流程和 QQ 登录。

@@ -1,6 +1,6 @@
 # 栖 · Windows 版
 
-> 此目录是供 GitHub 托管的干净初始源码，不包含应用成品、Python、依赖、模型、下载缓存或运行数据。先按下文构建桌面应用，再双击启动；首次运行所需组件届时下载。
+> GitHub 仓库已附带 Windows x64 桌面启动器 `栖.exe`。目录不包含 Python、项目依赖、模型、下载缓存或运行数据；首次启动时再自动准备所需组件。
 
 栖是运行在自己电脑上的 QQ AI 伙伴。它通过 NapCat 接入独立的机器人 QQ 账号，使用 DeepSeek 理解消息、决定是否回复，并提供浏览器管理界面，用来管理账号、角色、会话授权、记忆和运行状态。
 
@@ -47,13 +47,13 @@
 
 ## Windows 桌面启动
 
-日常双击目录中的 **栖.exe**，首次会显示安装窗口，自动准备项目内 Python、依赖和表情模型；无需预装 Python，也不会弹出命令窗口。安装中断后，可在窗口中重试。完成后自动打开浏览器控制台。
+日常双击仓库附带的 **栖.exe**，首次会显示安装窗口，自动准备项目内 Python、依赖和表情模型；无需预装 Python，也不会弹出命令窗口。安装中断后，可在窗口中重试。完成后自动打开浏览器控制台。
 
 程序常驻系统托盘，支持打开控制台、查看启动进度、查看日志、停止机器人并退出。重复双击应用会唤回已有启动器。关闭进度窗口只会隐藏窗口，退出请使用托盘菜单。
 
 本版本面向 **Windows x64 / .NET Framework 4.8**。QQ 接入仍需先安装并启动 Docker Desktop，使用 WSL 2 后端和 Linux 容器模式，见 [Docker 官方安装说明](https://docs.docker.com/desktop/setup/install/windows-install/)。Python 和 Docker 的安装是两个不同步骤，启动器不会自动启用系统虚拟化或安装 Docker Desktop。
 
-1. 将完整发行文件夹放在可写的本地目录，避免路径中含逗号；`栖.exe` 与 `scripts/` 保持同级。
+1. 从仓库下载 ZIP 并解压，或将完整发行文件夹放在可写的本地目录，避免路径中含逗号；`栖.exe` 与 `scripts/` 保持同级。
 2. 双击 **栖.exe**，等待图形安装完成并打开控制台。
 3. 在「账号与连接」填写管理 QQ、独立的机器人 QQ 和 DeepSeek API Key，保存并测试连接。
 4. 点击「打开 QQ 扫码登录」，在网页查看 Docker / NapCat 准备进度，再使用手机 QQ 扫码确认。
@@ -63,7 +63,7 @@ QQ 容器数据位于 `runtime/napcat/`；镜像和 Docker Desktop 虚拟磁盘�
 
 ### 从源码构建
 
-Git 跟踪启动器源码；当前源码目录不附带 `栖.exe`，需自行构建。Windows 开发者可在 PowerShell 执行 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/build.ps1`，使用系统 .NET Framework 编译器构建，无需 Python 或额外 NuGet 包。
+仓库已附带可直接运行的 Windows x64 `栖.exe`。Windows 开发者也可在 PowerShell 执行 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/build.ps1`，使用系统 .NET Framework 编译器从源码重建，无需 Python 或额外 NuGet 包。
 
 也可安装 .NET SDK 后运行 `dotnet build scripts/windows/Launcher.csproj -c Release`，会将 Windows 可执行文件复制到当前目录。该方式支持跨平台编译，但运行验收必须在 Windows 上进行。
 

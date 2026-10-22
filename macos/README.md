@@ -1,6 +1,6 @@
 # 栖 · macOS 版
 
-> 此目录是供 GitHub 托管的干净初始源码，不包含应用成品、Python、依赖、模型、下载缓存或运行数据。先按下文构建桌面应用，再双击启动；首次运行所需组件届时下载。
+> GitHub 仓库已附带 Apple Silicon（arm64）桌面启动器 `栖.app`。目录不包含 Python、项目依赖、模型、下载缓存或运行数据；首次启动时再自动准备所需组件。Intel Mac 用户需在 Intel Mac 上按下文构建对应版本。
 
 栖是运行在自己电脑上的 QQ AI 伙伴。它通过 NapCat 接入独立的机器人 QQ 账号，使用 DeepSeek 理解消息、决定是否回复，并提供浏览器管理界面，用来管理账号、角色、会话授权、记忆和运行状态。
 
@@ -47,13 +47,13 @@
 
 ## macOS 桌面启动
 
-日常双击目录中的 **栖.app**。首次显示图形安装窗口，自动下载经过校验的安装工具，准备项目内 Python、依赖和表情模型；普通用户无需安装 Python 或 Xcode。安装中断后可重试，完成后自动打开浏览器控制台。
+日常双击仓库附带的 **栖.app**。首次显示图形安装窗口，自动下载经过校验的安装工具，准备项目内 Python、依赖和表情模型；普通用户无需安装 Python 或 Xcode。安装中断后可重试，完成后自动打开浏览器控制台。
 
 应用常驻顶部菜单栏「栖」，提供打开控制台、查看启动进度、查看日志、停止机器人并退出。关闭安装窗口只会隐藏进度，安装仍在后台继续；退出请使用菜单栏入口。
 
 本版本面向支持 Apple Virtualization Framework 的 **Apple Silicon 或 Intel Mac**，在项目内的 Lima Linux 虚拟机中运行 Docker 与 NapCat。发行应用按 CPU 架构分别构建；需在目标架构的 Mac 上构建。
 
-1. 将完整发行文件夹放在可写位置，保留 `栖.app` 与 `scripts/` 的同级关系，不要单独把应用拖到 Applications。
+1. 从仓库下载 ZIP 并解压，或将完整发行文件夹放在可写位置，保留 `栖.app` 与 `scripts/` 的同级关系，不要单独把应用拖到 Applications。
 2. 双击 **栖.app**，等待图形安装完成并打开控制台。
 3. 在「账号与连接」填写管理 QQ、独立的机器人 QQ 与 DeepSeek API Key，保存并测试连接。
 4. 点击「打开 QQ 扫码登录」，在网页查看 Lima / Docker / NapCat 准备进度，再使用手机 QQ 扫码确认。
@@ -63,9 +63,9 @@ Python、虚拟机、QQ 登录状态和缓存均在本文件夹中生成，不�
 
 ### 从源码构建
 
-Git 跟踪 Swift/AppKit 启动器源码；当前源码目录不附带 `栖.app`，需自行构建。开发者安装 Xcode Command Line Tools 后，双击 `构建桌面应用.command`，或运行 `python3 scripts/build_macos_app.py` 即可构建当前架构的应用。
+仓库已附带 Apple Silicon（arm64）版 `栖.app`。Intel Mac 用户需在 Intel Mac 上构建对应版本。开发者安装 Xcode Command Line Tools 后，双击 `构建桌面应用.command`，或运行 `python3 scripts/build_macos_app.py`，即可按当前 Mac 架构从源码重建应用。
 
-应用仅作本地临时签名，未完成 Apple 公证；正式公开发行前需另行签名与公证。原有 `打开机器人.command`、`停止机器人.command` 保留用于排错；下载后若脚本缺少执行权限，可执行 `chmod +x *.command scripts/qq-env`。
+应用仅作本地临时签名，未完成 Apple 公证。首次打开时，macOS 可能提示无法验证开发者；可在 Finder 中按住 Control 点击 `栖.app`，选择「打开」，并在提示中再次确认。正式公开发行前需另行签名与公证。原有 `打开机器人.command`、`停止机器人.command` 保留用于排错；下载后若脚本缺少执行权限，可执行 `chmod +x *.command scripts/qq-env`。
 
 ## 使用方式
 
