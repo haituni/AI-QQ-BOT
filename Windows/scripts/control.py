@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import socket
 import sys
 import time
 import urllib.request
@@ -27,8 +28,13 @@ def running() -> bool:
 
 def start() -> None:
     env = environment()
+    env["QQBOT_PORT"] = "8765"
     Config(ROOT)
     if not running():
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.settimeout(1)
+            if probe.connect_ex(('127.0.0.1', 8765)) == 0:
+                raise RuntimeError('本机端口 8765 已被其他服务占用。请先退出旧版栖或停止占用程序，再重试。')
         (ROOT / 'logs').mkdir(exist_ok=True)
         path = ROOT / 'logs/server.log'
         if path.exists() and path.stat().st_size > 2_000_000:

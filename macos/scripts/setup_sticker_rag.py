@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from download_proxy import download_environment
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -25,12 +26,12 @@ def main() -> None:
             print(name + ': verified')
             continue
         temporary = folder / (name + '.part')
-        command = ['/usr/bin/curl', '--fail', '--location', '--connect-timeout', '25', '--max-time', '300']
+        command = ['/usr/bin/curl', '--fail', '--location', '--silent', '--show-error', '--retry', '2', '--retry-delay', '2', '--connect-timeout', '25', '--max-time', '300']
         if args.proxy:
             command += ['--proxy', args.proxy]
         command += ['--output', str(temporary),
                     f'https://huggingface.co/Xenova/bge-small-zh-v1.5/resolve/{MODEL_REVISION}/{remote}']
-        subprocess.run(command, check=True)
+        subprocess.run(command, env=download_environment(), check=True)
         if hashlib.sha256(temporary.read_bytes()).hexdigest() != expected:
             raise RuntimeError('Model checksum mismatch: ' + name)
         temporary.replace(target)
@@ -39,4 +40,11 @@ def main() -> None:
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except subprocess.CalledProcessError:
+        print('错误：表情模型下载失败，请检查系统代理能否访问 Hugging Face，然后重试。', flush=True)
+        raise SystemExit(1)
+    except RuntimeError:
+        print('错误：表情模型校验失败，请重试下载。', flush=True)
+        raise SystemExit(1)

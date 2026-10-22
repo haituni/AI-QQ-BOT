@@ -1,6 +1,7 @@
 import AppKit
 import CryptoKit
 import Darwin
+import SystemConfiguration
 
 final class Launcher: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let root = Bundle.main.bundleURL.deletingLastPathComponent()
@@ -163,6 +164,23 @@ final class Launcher: NSObject, NSApplicationDelegate, NSWindowDelegate {
         process.arguments = arguments
         process.currentDirectoryURL = root
         var env = ProcessInfo.processInfo.environment
+        // Native bootstrap runs before Python exists. curl does not read macOS proxies.
+        let explicitProxy = ["http_proxy", "https_proxy", "all_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"].contains { env[$0] != nil }
+        if !explicitProxy, let proxies = SCDynamicStoreCopyProxies(nil) as? [String: Any] {
+            for (scheme, key) in [("http", "HTTP"), ("https", "HTTPS")] {
+                if (proxies[key + "Enable"] as? NSNumber)?.boolValue == true,
+                   let host = proxies[key + "Proxy"] as? String,
+                   let port = proxies[key + "Port"] as? Int {
+                    var address = URLComponents()
+                    address.scheme = "http"
+                    address.host = host
+                    address.port = port
+                    env[scheme + "_proxy"] = address.string
+                }
+            }
+        }
+        env["no_proxy"] = (env["no_proxy"] ?? env["NO_PROXY"] ?? "") + ",localhost,127.0.0.1,::1"
+        env["NO_PROXY"] = env["no_proxy"]
         env["PYTHONPYCACHEPREFIX"] = root.appendingPathComponent("runtime/cache/pycache").path
         env["PYTHONUNBUFFERED"] = "1"
         env["PYTHONUTF8"] = "1"
@@ -182,6 +200,7 @@ final class Launcher: NSObject, NSApplicationDelegate, NSWindowDelegate {
         try process.run()
         var output = Data()
         var pending = Data()
+        var diagnostic = ""
         while true {
             let chunk = pipe.fileHandleForReading.availableData
             if chunk.isEmpty { break }
@@ -191,6 +210,9 @@ final class Launcher: NSObject, NSApplicationDelegate, NSWindowDelegate {
             while let newline = pending.firstIndex(of: 10) {
                 let line = String(data: pending[..<newline], encoding: .utf8) ?? ""
                 pending.removeSubrange(...newline)
+                if !capture && line.hasPrefix("错误：") {
+                    diagnostic = String(line.dropFirst(3).prefix(200))
+                }
                 if !capture && line.hasPrefix("阶段：") {
                     updatePhase(String(line.dropFirst(3).prefix(100)))
                 }
@@ -198,7 +220,7 @@ final class Launcher: NSObject, NSApplicationDelegate, NSWindowDelegate {
             if pending.count > 32768 { pending.removeAll() }
         }
         process.waitUntilExit()
-        return (process.terminationStatus == 0, String(data: output, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
+        return (process.terminationStatus == 0, capture ? (String(data: output, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "") : diagnostic)
     }
 
     // Bootstrap directly from the native app, so end users need neither Python nor Xcode.
@@ -270,7 +292,7 @@ final class Launcher: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     let seed = try self.bootstrapPython()
                     self.updatePhase("检查运行环境；首次下载可能需要数分钟…")
                     let result = try self.run(seed, [self.root.appendingPathComponent("scripts/bootstrap.py").path])
-                    if !result.0 { throw NSError(domain: "Bootstrap", code: 1) }
+                    if !result.0 { throw NSError(domain: "Bootstrap", code: 1, userInfo: [NSLocalizedDescriptionKey: result.1.isEmpty ? "运行环境安装失败，请查看 logs/desktop.log。" : result.1]) }
                     self.updatePhase("启动管理服务…")
                 }
                 if action == "stop" && !fm.fileExists(atPath: self.root.appendingPathComponent("runtime/server.pid").path)
@@ -282,7 +304,7 @@ final class Launcher: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     detail = result.1
                 }
             } catch {
-                detail = "请检查网络及 logs/desktop.log。可从菜单重试；首次安装需要联网。"
+                detail = (error as NSError).domain == "Bootstrap" ? error.localizedDescription : "安装工具或 Python 准备失败，请检查系统代理及 logs/desktop.log 后重试。"
             }
             DispatchQueue.main.async {
                 self.busy = false
