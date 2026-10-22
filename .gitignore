@@ -48,3 +48,6 @@ macos/build/
 Thumbs.db
 Windows/*.zip
 macos/*.zip
+
+# Original local-project introduction.
+/README.local.md
