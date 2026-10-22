@@ -3,6 +3,7 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -165,7 +166,23 @@ internal sealed class Launcher : Form
             start.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
             start.EnvironmentVariables["PYTHONUNBUFFERED"] = "1";
             start.EnvironmentVariables["PYTHONPYCACHEPREFIX"] = Path.Combine(root, "runtime", "cache", "pycache");
+            // curl/uv do not automatically inherit Windows Internet Settings.
+            bool explicitProxy = false;
+            foreach (string key in new[] { "http_proxy", "https_proxy", "all_proxy" })
+                if (!String.IsNullOrEmpty(start.EnvironmentVariables[key])) explicitProxy = true;
+            if (!explicitProxy && WebRequest.DefaultWebProxy != null)
+            {
+                foreach (string scheme in new[] { "http", "https" })
+                {
+                    var target = new Uri(scheme + "://huggingface.co");
+                    var proxy = WebRequest.DefaultWebProxy.GetProxy(target);
+                    if (proxy != null && proxy != target)
+                        start.EnvironmentVariables[scheme + "_proxy"] = proxy.AbsoluteUri;
+                }
+            }
+            start.EnvironmentVariables["NO_PROXY"] = (start.EnvironmentVariables["NO_PROXY"] ?? "") + ",localhost,127.0.0.1,::1";
             var output = new StringBuilder();
+            string diagnostic = null;
             using (var log = new StreamWriter(logPath, true, new UTF8Encoding(false)))
             using (var process = new Process { StartInfo = start })
             {
@@ -176,6 +193,11 @@ internal sealed class Launcher : Form
                     {
                         if (capture) { if (output.Length < 8192) output.AppendLine(e.Data); }
                         else log.WriteLine(e.Data);
+                    }
+                    if (!capture && e.Data.StartsWith("错误：", StringComparison.Ordinal))
+                    {
+                        string message = e.Data.Substring(3);
+                        lock (logLock) { diagnostic = message.Length > 200 ? message.Substring(0, 200) : message; }
                     }
                     // Only explicit phase messages reach the window. Raw diagnostic output stays in local logs.
                     if (!capture && e.Data.StartsWith("阶段：", StringComparison.Ordinal))
@@ -197,7 +219,7 @@ internal sealed class Launcher : Form
                     throw new TimeoutException();
                 }
                 process.WaitForExit();
-                if (process.ExitCode != 0) throw new InvalidOperationException("Command failed");
+                if (process.ExitCode != 0) throw new InvalidOperationException(diagnostic ?? "启动失败，请查看 logs/desktop.log 和 logs/server.log。");
             }
             return output.ToString().Trim();
         });
@@ -228,6 +250,7 @@ internal sealed class Launcher : Form
             Status("服务已启动");
             Hide();
         }
+        catch (InvalidOperationException error) { Failed(error.Message); }
         catch (Exception) { Failed("启动未完成，请检查网络、目录权限和 logs/desktop.log。"); }
         finally { busy = false; retry.Enabled = true; progress.Style = ProgressBarStyle.Blocks; }
     }

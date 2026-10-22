@@ -20,6 +20,17 @@ $env:PYTHONUNBUFFERED = '1'
 $env:TEMP = Join-Path $runtime 'tmp'
 $env:TMP = $env:TEMP
 $env:PYTHONPYCACHEPREFIX = Join-Path $runtime 'cache\pycache'
+# Native download tools need explicit proxy variables, even when the browser works.
+if (-not ($env:HTTP_PROXY -or $env:HTTPS_PROXY -or $env:ALL_PROXY)) {
+    foreach ($scheme in @('http', 'https')) {
+        $target = [Uri]("${scheme}://huggingface.co")
+        $proxy = [Net.WebRequest]::DefaultWebProxy.GetProxy($target)
+        if ($null -ne $proxy -and $proxy -ne $target) {
+            [Environment]::SetEnvironmentVariable("${scheme}_proxy", $proxy.AbsoluteUri, 'Process')
+        }
+    }
+}
+$env:NO_PROXY = "$($env:NO_PROXY),localhost,127.0.0.1,::1"
 $python = Join-Path $root '.venv\Scripts\python.exe'
 $lock = $null
 try {

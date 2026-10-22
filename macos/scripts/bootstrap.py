@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tarfile
 from pathlib import Path
+from download_proxy import download_environment
 from install_state import complete, installation, ready
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -18,7 +19,7 @@ RUNTIME = ROOT / "runtime"
 
 
 def environment() -> dict[str, str]:
-    env = os.environ.copy()
+    env = download_environment()
     env.update({"UV_CACHE_DIR": str(RUNTIME / "cache/uv"),
                 "UV_PYTHON_INSTALL_DIR": str(RUNTIME / "python"),
                 "UV_PYTHON_BIN_DIR": str(RUNTIME / "bin"),
@@ -51,7 +52,7 @@ def download(url: str, path: Path, digest: str | None = None) -> None:
     # Use curl's platform certificate store; never turn off certificate verification.
     for attempt in range(3):
         result = subprocess.run(["/usr/bin/curl", "-fL", "--connect-timeout", "25", "--max-time", "900",
-                                 "-C", "-", "-o", str(path), url], env=environment())
+                                 *(["-C", "-"] if digest else []), "-o", str(path), url], env=environment())
         if result.returncode == 0:
             break
         if attempt == 2:

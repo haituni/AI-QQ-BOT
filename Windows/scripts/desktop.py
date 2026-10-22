@@ -49,5 +49,5 @@ if __name__ == '__main__':
     try:
         main()
     except Exception as error:
-        print('操作未完成：' + str(error), file=sys.stderr)
+        print('错误：' + (str(error) if isinstance(error, RuntimeError) else '操作未完成，请查看 logs/server.log。'), file=sys.stderr)
         raise SystemExit(1)
